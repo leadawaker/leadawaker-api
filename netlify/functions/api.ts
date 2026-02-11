@@ -9,6 +9,9 @@ export const handler: Handler = async (event) => {
   if (!tableId) {
     return {
       statusCode: 400,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
       body: JSON.stringify({ error: "Missing tableId" }),
     };
   }
@@ -17,9 +20,7 @@ export const handler: Handler = async (event) => {
     const response = await fetch(
       `${NOCODB_BASE_URL}/tables/${tableId}/records`,
       {
-        headers: {
-          "xc-token": NOCODB_TOKEN,
-        },
+        headers: { "xc-token": NOCODB_TOKEN },
       }
     );
 
@@ -27,12 +28,18 @@ export const handler: Handler = async (event) => {
 
     return {
       statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*", // <--- allow your frontend to fetch
+      },
       body: JSON.stringify(data),
     };
   } catch (err) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: "Failed to fetch data" }),
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+      },
+      body: JSON.stringify({ error: String(err) }),
     };
   }
 };

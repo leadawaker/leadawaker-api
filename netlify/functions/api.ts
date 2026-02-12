@@ -4,41 +4,36 @@ const NOCODB_BASE_URL = process.env.NOCODB_BASE_URL!;
 const NOCODB_TOKEN = process.env.NOCODB_TOKEN!;
 
 export const handler: Handler = async (event) => {
-  const tableId = event.queryStringParameters?.tableId;
+  try {
+    const path = event.path.replace("/.netlify/functions/api", "");
+    const url = `${NOCODB_BASE_URL}${path}${event.rawQuery ? `?${event.rawQuery}` : ""}`;
 
-  if (!tableId) {
+    const response = await fetch(url, {
+      method: event.httpMethod,
+      headers: {
+        "Content-Type": "application/json",
+        "xc-token": NOCODB_TOKEN,
+      },
+      body: ["POST", "PATCH", "PUT"].includes(event.httpMethod)
+        ? event.body
+        : undefined,
+    });
+
+    const text = await response.text();
+
     return {
-      statusCode: 400,
+      statusCode: response.status,
       headers: {
         "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "*",
+        "Access-Control-Allow-Methods": "*",
       },
-      body: JSON.stringify({ error: "Missing tableId" }),
-    };
-  }
-
-  try {
-    const response = await fetch(
-      `${NOCODB_BASE_URL}/tables/${tableId}/records`,
-      {
-        headers: { "xc-token": NOCODB_TOKEN },
-      }
-    );
-
-    const data = await response.json();
-
-    return {
-      statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*", // <--- allow your frontend to fetch
-      },
-      body: JSON.stringify(data),
+      body: text,
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
+      headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({ error: String(err) }),
     };
   }

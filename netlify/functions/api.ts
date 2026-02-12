@@ -5,10 +5,12 @@ const NOCODB_TOKEN = process.env.NOCODB_TOKEN!;
 
 export const handler: Handler = async (event) => {
   try {
-    const path = event.path.replace("/.netlify/functions/api", "");
-    const url = `${NOCODB_BASE_URL}${path}${event.rawQuery ? `?${event.rawQuery}` : ""}`;
+    // This gets the actual path after /.netlify/functions/api
+    const urlObj = new URL(event.rawUrl);
+    const proxyPath = urlObj.pathname.replace("/.netlify/functions/api", "");
+    const targetUrl = `${NOCODB_BASE_URL}${proxyPath}${urlObj.search}`;
 
-    const response = await fetch(url, {
+    const response = await fetch(targetUrl, {
       method: event.httpMethod,
       headers: {
         "Content-Type": "application/json",

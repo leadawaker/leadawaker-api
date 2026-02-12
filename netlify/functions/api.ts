@@ -5,16 +5,21 @@ const NOCODB_TOKEN = process.env.NOCODB_TOKEN!;
 
 export const handler: Handler = async (event) => {
   try {
-    console.log("RAW URL:", event.rawUrl);
-    console.log("PATH:", event.path);
-    console.log("METHOD:", event.httpMethod);
+    const tableId = event.queryStringParameters?.tableId;
+    const recordId = event.queryStringParameters?.id;
 
-    const urlObj = new URL(event.rawUrl);
+    if (!tableId) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing tableId" }),
+      };
+    }
 
-    const proxyPath = urlObj.pathname.replace("/.netlify/functions/api", "");
-    const targetUrl = `${NOCODB_BASE_URL}${proxyPath}${urlObj.search}`;
-
-    console.log("TARGET URL TO NOCODB:", targetUrl);
+    // Build correct NocoDB URL
+    let targetUrl = `${NOCODB_BASE_URL}/tables/${tableId}/records`;
+    if (recordId) {
+      targetUrl += `/${recordId}`;
+    }
 
     const response = await fetch(targetUrl, {
       method: event.httpMethod,
@@ -22,30 +27,23 @@ export const handler: Handler = async (event) => {
         "Content-Type": "application/json",
         "xc-token": NOCODB_TOKEN,
       },
-      body: ["POST", "PATCH", "PUT"].includes(event.httpMethod)
+      body: ["POST", "PATCH"].includes(event.httpMethod)
         ? event.body
         : undefined,
     });
 
     const text = await response.text();
 
-    console.log("NOCODB STATUS:", response.status);
-    console.log("NOCODB RESPONSE:", text);
-
     return {
       statusCode: response.status,
       headers: {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "*",
-        "Access-Control-Allow-Methods": "*",
       },
       body: text,
     };
   } catch (err) {
-    console.error("FUNCTION ERROR:", err);
     return {
       statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({ error: String(err) }),
     };
   }

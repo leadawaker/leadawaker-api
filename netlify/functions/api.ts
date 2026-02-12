@@ -5,10 +5,16 @@ const NOCODB_TOKEN = process.env.NOCODB_TOKEN!;
 
 export const handler: Handler = async (event) => {
   try {
-    // This gets the actual path after /.netlify/functions/api
+    console.log("RAW URL:", event.rawUrl);
+    console.log("PATH:", event.path);
+    console.log("METHOD:", event.httpMethod);
+
     const urlObj = new URL(event.rawUrl);
+
     const proxyPath = urlObj.pathname.replace("/.netlify/functions/api", "");
     const targetUrl = `${NOCODB_BASE_URL}${proxyPath}${urlObj.search}`;
+
+    console.log("TARGET URL TO NOCODB:", targetUrl);
 
     const response = await fetch(targetUrl, {
       method: event.httpMethod,
@@ -23,6 +29,9 @@ export const handler: Handler = async (event) => {
 
     const text = await response.text();
 
+    console.log("NOCODB STATUS:", response.status);
+    console.log("NOCODB RESPONSE:", text);
+
     return {
       statusCode: response.status,
       headers: {
@@ -33,6 +42,7 @@ export const handler: Handler = async (event) => {
       body: text,
     };
   } catch (err) {
+    console.error("FUNCTION ERROR:", err);
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },

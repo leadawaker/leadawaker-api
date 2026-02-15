@@ -40,7 +40,7 @@ export const handler: Handler = async (event) => {
         response = await supabase
           .from(tableId)
           .select("*")
-          .eq("id", Number(recordId)) // convert ID to number
+          .eq("Id", Number(recordId)) // convert ID to number
           .single();
       } else {
         response = await supabase.from(tableId).select("*");
@@ -66,7 +66,7 @@ export const handler: Handler = async (event) => {
       response = await supabase
         .from(tableId)
         .update(parsedBody)
-        .eq("id", Number(recordId)) // convert ID to number
+        .eq("Id", Number(recordId)) // convert ID to number
         .select()
         .single();
     }
@@ -79,7 +79,7 @@ export const handler: Handler = async (event) => {
       response = await supabase
         .from(tableId)
         .delete()
-        .eq("id", Number(recordId)); // convert ID to number
+        .eq("Id", Number(recordId)); // convert ID to number
     }
 
     if (!response) {

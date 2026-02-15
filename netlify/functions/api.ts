@@ -1,10 +1,14 @@
 import type { Handler } from "@netlify/functions";
+import { createClient } from '@supabase/supabase-js';
 
-const NOCODB_BASE_URL = process.env.NOCODB_BASE_URL!;
-const NOCODB_TOKEN = process.env.NOCODB_TOKEN!;
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY!;  // service_role key
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false }
+});
 
 export const handler: Handler = async (event) => {
-  // Handle CORS
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
@@ -13,77 +17,62 @@ export const handler: Handler = async (event) => {
         "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type",
       },
-      body: "",
     };
   }
 
-  const tableId = event.queryStringParameters?.tableId;
+  const tableId = event.queryStringParameters?.tableId;  // 'leads', 'accounts'
   const recordId = event.queryStringParameters?.id;
 
   if (!tableId) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Missing tableId" }),
-    };
+    return { statusCode: 400, body: JSON.stringify({ error: "Missing tableId" }) };
   }
 
-  // ✅ Always use v2 endpoint (no /records/{id})
-  const url = `${NOCODB_BASE_URL}/tables/${tableId}/records`;
-
   try {
-    const headers = {
-      "xc-token": NOCODB_TOKEN,
-      "Content-Type": "application/json",
-    };
+    switch (event.httpMethod) {
+      case 'GET':
+        if (recordId) {
+          const { data, error } = await supabase.from(tableId).select('*').eq('id', recordId).single();
+          if (error) throw error;
+          return { statusCode: 200, body: JSON.stringify(data) };
+        }
+        const { data, error } = await supabase.from(tableId).select('*');
+        if (error) throw error;
+        return { statusCode: 200, body: JSON.stringify(data) };
 
-    let body: string | undefined = undefined;
+      case 'POST':
+        const { data: insertData, error: insertError } = await supabase
+          .from(tableId)
+          .insert(JSON.parse(event.body || '{}'));
+        if (insertError) throw insertError;
+        return { statusCode: 201, body: JSON.stringify(insertData) };
 
-    // POST (create)
-    if (event.httpMethod === "POST") {
-      body = event.body || "{}";
+      case 'PATCH':
+        if (!recordId) return { statusCode: 400, body: JSON.stringify({ error: "Missing id" }) };
+        const { data: updateData, error: updateError } = await supabase
+          .from(tableId)
+          .update(JSON.parse(event.body || '{}'))
+          .eq('id', recordId);
+        if (updateError) throw updateError;
+        return { statusCode: 200, body: JSON.stringify(updateData) };
+
+      case 'DELETE':
+        if (!recordId) return { statusCode: 400, body: JSON.stringify({ error: "Missing id" }) };
+        const { error: deleteError } = await supabase
+          .from(tableId)
+          .delete()
+          .eq('id', recordId);
+        if (deleteError) throw deleteError;
+        return { statusCode: 204 };
+
+      default:
+        return { statusCode: 405 };
     }
-
-    // PATCH (update)
-    if (event.httpMethod === "PATCH") {
-      const parsed = JSON.parse(event.body || "{}");
-      body = JSON.stringify({
-        Id: Number(recordId),
-        ...parsed,
-      });
-    }
-
-    // DELETE
-    if (event.httpMethod === "DELETE") {
-      body = JSON.stringify({
-        Id: Number(recordId),
-      });
-    }
-
-    const response = await fetch(url, {
-      method: event.httpMethod,
-      headers,
-      body,
-    });
-
-    const text = await response.text();
-
-    return {
-      statusCode: response.status,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
-      body: text,
-    };
-  } catch (err) {
-    console.error("Function error:", err);
-
+  } catch (err: any) {
+    console.error("Supabase error:", err);
     return {
       statusCode: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-      body: JSON.stringify({ error: "Failed to process request" }),
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };

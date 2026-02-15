@@ -1,14 +1,14 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
-// Initialize Supabase client with environment variables
+// Initialize Supabase client using environment variables
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 );
 
 export const handler: Handler = async (event) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
@@ -34,62 +34,54 @@ export const handler: Handler = async (event) => {
   try {
     let response;
 
-    // Safely parse JSON body if present
-    const body = event.body ? JSON.parse(event.body) : {};
-
-    // ✅ GET - list or single record
+    // GET: fetch one record by ID or all records
     if (event.httpMethod === "GET") {
       if (recordId) {
         response = await supabase
           .from(tableId)
           .select("*")
-          .eq("id", Number(recordId))
+          .eq("id", Number(recordId)) // convert ID to number
           .single();
       } else {
         response = await supabase.from(tableId).select("*");
       }
     }
 
-    // ✅ POST - create new record
+    // POST: create a new record
     if (event.httpMethod === "POST") {
+      const parsedBody = JSON.parse(event.body || "{}");
       response = await supabase
         .from(tableId)
-        .insert(body)
+        .insert(parsedBody)
         .select()
         .single();
     }
 
-    // ✅ PATCH - update existing record
+    // PATCH: update an existing record
     if (event.httpMethod === "PATCH") {
       if (!recordId) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ error: "Missing id for PATCH" }),
-        };
+        return { statusCode: 400, body: JSON.stringify({ error: "Missing record ID" }) };
       }
+      const parsedBody = JSON.parse(event.body || "{}");
       response = await supabase
         .from(tableId)
-        .update(body)
-        .eq("id", Number(recordId))
+        .update(parsedBody)
+        .eq("id", Number(recordId)) // convert ID to number
         .select()
         .single();
     }
 
-    // ✅ DELETE - remove a record
+    // DELETE: delete a record by ID
     if (event.httpMethod === "DELETE") {
       if (!recordId) {
-        return {
-          statusCode: 400,
-          body: JSON.stringify({ error: "Missing id for DELETE" }),
-        };
+        return { statusCode: 400, body: JSON.stringify({ error: "Missing record ID" }) };
       }
       response = await supabase
         .from(tableId)
         .delete()
-        .eq("id", Number(recordId));
+        .eq("id", Number(recordId)); // convert ID to number
     }
 
-    // If method is not handled
     if (!response) {
       return {
         statusCode: 405,
@@ -103,30 +95,21 @@ export const handler: Handler = async (event) => {
       console.error("Supabase error:", error);
       return {
         statusCode: 400,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Content-Type": "application/json",
-        },
+        headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" },
         body: JSON.stringify({ error: error.message }),
       };
     }
 
     return {
       statusCode: 200,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
+      headers: { "Access-Control-Allow-Origin": "*", "Content-Type": "application/json" },
       body: JSON.stringify(data),
     };
   } catch (err) {
     console.error("Function error:", err);
     return {
       statusCode: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Content-Type": "application/json",
-      },
+      headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({ error: "Failed to process request" }),
     };
   }

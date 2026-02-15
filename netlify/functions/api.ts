@@ -1,13 +1,14 @@
 import type { Handler } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
+// Initialize Supabase client with environment variables
 const supabase = createClient(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_KEY!
 );
 
 export const handler: Handler = async (event) => {
-  // Handle CORS
+  // Handle CORS preflight requests
   if (event.httpMethod === "OPTIONS") {
     return {
       statusCode: 200,
@@ -33,48 +34,62 @@ export const handler: Handler = async (event) => {
   try {
     let response;
 
-    // ✅ GET (list or single record)
+    // Safely parse JSON body if present
+    const body = event.body ? JSON.parse(event.body) : {};
+
+    // ✅ GET - list or single record
     if (event.httpMethod === "GET") {
       if (recordId) {
         response = await supabase
           .from(tableId)
           .select("*")
-          .eq("id", recordId)
+          .eq("id", Number(recordId))
           .single();
       } else {
-        response = await supabase
-          .from(tableId)
-          .select("*");
+        response = await supabase.from(tableId).select("*");
       }
     }
 
-    // ✅ POST (create)
+    // ✅ POST - create new record
     if (event.httpMethod === "POST") {
       response = await supabase
         .from(tableId)
-        .insert(JSON.parse(event.body || "{}"))
+        .insert(body)
         .select()
         .single();
     }
 
-    // ✅ PATCH (update)
+    // ✅ PATCH - update existing record
     if (event.httpMethod === "PATCH") {
+      if (!recordId) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: "Missing id for PATCH" }),
+        };
+      }
       response = await supabase
         .from(tableId)
-        .update(JSON.parse(event.body || "{}"))
-        .eq("id", recordId)
+        .update(body)
+        .eq("id", Number(recordId))
         .select()
         .single();
     }
 
-    // ✅ DELETE
+    // ✅ DELETE - remove a record
     if (event.httpMethod === "DELETE") {
+      if (!recordId) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ error: "Missing id for DELETE" }),
+        };
+      }
       response = await supabase
         .from(tableId)
         .delete()
-        .eq("id", recordId);
+        .eq("id", Number(recordId));
     }
 
+    // If method is not handled
     if (!response) {
       return {
         statusCode: 405,
@@ -86,7 +101,6 @@ export const handler: Handler = async (event) => {
 
     if (error) {
       console.error("Supabase error:", error);
-
       return {
         statusCode: 400,
         headers: {
@@ -107,11 +121,11 @@ export const handler: Handler = async (event) => {
     };
   } catch (err) {
     console.error("Function error:", err);
-
     return {
       statusCode: 500,
       headers: {
         "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({ error: "Failed to process request" }),
     };
